@@ -13,6 +13,15 @@ NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 XML_SPACE = '{http://www.w3.org/XML/1998/namespace}space'
 BASE_TEMPLATE = os.path.join(os.path.dirname(__file__), 'assets', 'Template_Adyton_BASE.docx')
 
+# Position du taquet de tabulation pour l'alignement à droite des dates de mission
+# = largeur utile de la page (pgW - marges L/R). pgSz w=11906, pgMar left=900 right=900.
+MISSION_DATE_TAB_POS = "10106"
+
+# Pied de page légal Adyton (trait bleu + mentions), injecté sur toutes les pages
+FOOTER_TEXT = ("Adyton Consulting – 3 rue Charcot – 92 200 Neuilly sur Seine "
+               "– SAS au Capital de 40 000€ - RCS de Paris 495 207 201")
+BRAND_BLUE = "17457A"
+
 
 def W(tag):
     return f'{{{NS}}}{tag}'
@@ -66,6 +75,10 @@ def set_cell_text(tc, text):
 
 
 def set_mission_header(para, company, date):
+    """Écrit société + date sur la ligne d'en-tête de mission. La date est poussée
+    par un vrai taquet de tabulation aligné à droite (voir ensure_right_tab_stop),
+    pas par un padding d'espaces : ça la colle exactement en bout de ligne quelle
+    que soit la longueur du nom de société, même avec une police à chasse variable."""
     runs = para.findall(f'.//{W("r")}')
     if not runs:
         return
@@ -75,13 +88,132 @@ def set_mission_header(para, company, date):
     t0 = runs[0].find(W('t'))
     if t0 is None:
         t0 = etree.SubElement(runs[0], W('t'))
-    t0.text = company.ljust(85)
+    t0.text = company
     t0.set(XML_SPACE, 'preserve')
-    t_last = runs[-1].find(W('t'))
+
+    last_run = runs[-1]
+    t_last = last_run.find(W('t'))
     if t_last is None:
-        t_last = etree.SubElement(runs[-1], W('t'))
+        t_last = etree.SubElement(last_run, W('t'))
+    # Insère un vrai <w:tab/> juste avant le texte de la date
+    tab_el = etree.Element(W('tab'))
+    last_run.insert(list(last_run).index(t_last), tab_el)
     t_last.text = date
     t_last.set(XML_SPACE, 'preserve')
+
+
+def ensure_right_tab_stop(para, pos=MISSION_DATE_TAB_POS):
+    """Ajoute un taquet de tabulation aligné à droite au paragraphe (une seule fois),
+    pour que le <w:tab/> inséré par set_mission_header pousse la date jusqu'au bord
+    droit de la page."""
+    pPr = para.find(W('pPr'))
+    if pPr is None:
+        pPr = etree.Element(W('pPr'))
+        para.insert(0, pPr)
+    if pPr.find(W('tabs')) is not None:
+        return
+    tabs = etree.Element(W('tabs'))
+    tab = etree.SubElement(tabs, W('tab'))
+    tab.set(W('val'), 'right')
+    tab.set(W('pos'), pos)
+    # Ordre du schéma CT_PPr : w:tabs doit venir après w:pBdr s'il est présent
+    pBdr = pPr.find(W('pBdr'))
+    if pBdr is not None:
+        pBdr.addnext(tabs)
+    else:
+        pPr.insert(0, tabs)
+
+
+def format_display_name(nom_json: str) -> str:
+    """Convertit le nom stocké au format 'NOM Prénom' (ex: 'DUPONT Thomas') en
+    affichage 'Prénom NOM' (ex: 'Thomas DUPONT') : prénom en casse normale, nom de
+    famille en MAJUSCULES — c'est le format validé par le client (le premier ordre,
+    tout en majuscules, avait été jugé pas assez lisible)."""
+    parts = nom_json.strip().split()
+    if len(parts) < 2:
+        return nom_json
+    nom_famille, prenom = parts[0], " ".join(parts[1:])
+    return f"{prenom} {nom_famille.upper()}"
+
+
+def remove_empty_profil_paragraphs(body):
+    """Si moins de 4 paragraphes de profil sont fournis, les entrées vides restantes
+    laissent des lignes blanches avant le titre 'Compétences' : on les retire. On ne
+    touche JAMAIS à l'espaceur légitime du template (paragraphe vide avec
+    pStyle='Titre1' juste avant 'Compétences'), qui crée le saut de ligne normal
+    entre le profil et la section suivante."""
+    def has_titre1_style(el):
+        pPr = el.find(W('pPr'))
+        if pPr is None:
+            return False
+        pStyle = pPr.find(W('pStyle'))
+        return pStyle is not None and pStyle.get(W('val')) == 'Titre1'
+
+    items = list(body)
+    comp_idx = None
+    for i, el in enumerate(items):
+        if el.tag == W('p') and get_text(el).strip() == 'Compétences':
+            comp_idx = i
+            break
+    if comp_idx is None:
+        return
+
+    removed = 0
+    j = comp_idx - 1
+    while j >= 0 and removed < 3:
+        el = items[j]
+        if el.tag == W('p') and get_text(el).strip() == '' and not has_titre1_style(el):
+            body.remove(el)
+            removed += 1
+            j -= 1
+        else:
+            break
+
+
+def build_footer_xml() -> bytes:
+    return f'''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:ftr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:p>
+<w:pPr>
+<w:pBdr><w:top w:val="single" w:sz="6" w:space="4" w:color="{BRAND_BLUE}"/></w:pBdr>
+<w:jc w:val="center"/>
+<w:rPr><w:rFonts w:ascii="Roboto" w:hAnsi="Roboto"/><w:color w:val="595959"/><w:sz w:val="14"/><w:szCs w:val="14"/></w:rPr>
+</w:pPr>
+<w:r>
+<w:rPr><w:rFonts w:ascii="Roboto" w:hAnsi="Roboto"/><w:color w:val="595959"/><w:sz w:val="14"/><w:szCs w:val="14"/></w:rPr>
+<w:t xml:space="preserve">{FOOTER_TEXT}</w:t>
+</w:r>
+</w:p>
+</w:ftr>'''.encode('utf-8')
+
+
+def add_footer_to_parts(content_types: str, doc_rels: str, document_xml: str):
+    """Ajoute la relation footer1.xml, son content-type, et le footerReference dans
+    sectPr. Retourne (content_types, doc_rels, document_xml) mis à jour."""
+    if 'footerReference' in document_xml:
+        return content_types, doc_rels, document_xml
+
+    rids = [int(m) for m in re.findall(r'Id="rId(\d+)"', doc_rels)]
+    next_rid = max(rids) + 1 if rids else 1
+    rid = f'rId{next_rid}'
+
+    rel_tag = (f'<Relationship Id="{rid}" '
+               f'Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer" '
+               f'Target="footer1.xml"/>')
+    doc_rels = doc_rels.replace('</Relationships>', rel_tag + '</Relationships>')
+
+    ct_tag = ('<Override PartName="/word/footer1.xml" '
+              'ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml"/>')
+    content_types = content_types.replace('</Types>', ct_tag + '</Types>')
+
+    footer_ref = f'<w:footerReference w:type="default" r:id="{rid}"/>'
+
+    def inject(match):
+        return f'{match.group(1)}{footer_ref}{match.group(2)}</w:sectPr>'
+
+    document_xml, _ = re.subn(r'(<w:sectPr[^>]*>)(.*?)</w:sectPr>', inject, document_xml, flags=re.S)
+
+    return content_types, doc_rels, document_xml
 
 
 def set_contexte(para, contexte_text):
@@ -125,7 +257,7 @@ def generate(cv_data: dict) -> bytes:
     # ── NOM ──────────────────────────────────────────────────────────────────
     nom_p = find_para(body, '{{NOM}}')
     if nom_p is not None:
-        set_text(nom_p, cv_data['nom'].upper())
+        set_text(nom_p, format_display_name(cv_data['nom']))
 
     # ── TITRE ─────────────────────────────────────────────────────────────────
     titre_p = find_para(body, '{{TITRE}}')
@@ -138,6 +270,7 @@ def generate(cv_data: dict) -> bytes:
         ph = find_para(body, f'{{{{PROFIL_{i}}}}}')
         if ph is not None:
             set_text(ph, text)
+    remove_empty_profil_paragraphs(body)
 
     # ── COMPÉTENCES ───────────────────────────────────────────────────────────
     competences = cv_data.get('competences', [])
@@ -174,6 +307,7 @@ def generate(cv_data: dict) -> bytes:
     env_ph     = find_para(body, '{{CONTEXTE}}')
 
     if company_ph is not None and missions:
+        ensure_right_tab_stop(company_ph)
         items = list(body)
         idx_company = items.index(company_ph)
         ref_empty   = items[idx_company - 1]
@@ -209,16 +343,27 @@ def generate(cv_data: dict) -> bytes:
     if remaining:
         raise ValueError(f"Placeholders non remplis : {set(remaining)}")
 
-    # ── OUTPUT ────────────────────────────────────────────────────────────────
+    # ── OUTPUT (+ pied de page Adyton sur toutes les pages) ──────────────────
     new_doc_xml = etree.tostring(root, xml_declaration=True, encoding='UTF-8', standalone=True)
+
+    content_types = all_files['[Content_Types].xml'].decode('utf-8')
+    doc_rels = all_files['word/_rels/document.xml.rels'].decode('utf-8')
+    doc_xml_str = new_doc_xml.decode('utf-8')
+
+    content_types, doc_rels, doc_xml_str = add_footer_to_parts(content_types, doc_rels, doc_xml_str)
 
     output = io.BytesIO()
     with zipfile.ZipFile(io.BytesIO(base_bytes), 'r') as zin:
         with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as zout:
             for item in zin.infolist():
                 if item.filename == 'word/document.xml':
-                    zout.writestr('word/document.xml', new_doc_xml)
+                    zout.writestr('word/document.xml', doc_xml_str.encode('utf-8'))
+                elif item.filename == '[Content_Types].xml':
+                    zout.writestr(item, content_types)
+                elif item.filename == 'word/_rels/document.xml.rels':
+                    zout.writestr(item, doc_rels)
                 else:
                     zout.writestr(item, zin.read(item.filename))
+            zout.writestr('word/footer1.xml', build_footer_xml())
 
     return output.getvalue()
