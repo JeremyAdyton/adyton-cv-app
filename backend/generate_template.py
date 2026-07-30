@@ -177,10 +177,10 @@ def build_footer_xml() -> bytes:
 <w:pPr>
 <w:pBdr><w:top w:val="single" w:sz="6" w:space="4" w:color="{BRAND_BLUE}"/></w:pBdr>
 <w:jc w:val="center"/>
-<w:rPr><w:rFonts w:ascii="Roboto" w:hAnsi="Roboto"/><w:color w:val="595959"/><w:sz w:val="14"/><w:szCs w:val="14"/></w:rPr>
+<w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos"/><w:color w:val="595959"/><w:sz w:val="14"/><w:szCs w:val="14"/></w:rPr>
 </w:pPr>
 <w:r>
-<w:rPr><w:rFonts w:ascii="Roboto" w:hAnsi="Roboto"/><w:color w:val="595959"/><w:sz w:val="14"/><w:szCs w:val="14"/></w:rPr>
+<w:rPr><w:rFonts w:ascii="Aptos" w:hAnsi="Aptos"/><w:color w:val="595959"/><w:sz w:val="14"/><w:szCs w:val="14"/></w:rPr>
 <w:t xml:space="preserve">{FOOTER_TEXT}</w:t>
 </w:r>
 </w:p>
