@@ -138,7 +138,7 @@ async def generate_template(file: UploadFile = File(...)):
             max_tokens=4096,
             messages=[{
                 "role": "user",
-                "content": EXTRACTION_PROMPT.format(cv_text=cv_text[:12000])
+                "content": EXTRACTION_PROMPT.replace("{cv_text}", cv_text[:12000])
             }]
         )
         raw = message.content[0].text.strip()
