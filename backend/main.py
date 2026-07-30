@@ -37,10 +37,10 @@ Analyse le CV ci-dessous et retourne UNIQUEMENT un objet JSON valide (sans texte
   "nom": "NOM Prénom  (majuscules pour le nom de famille, ex: DUPONT Thomas)",
   "titre": "Intitulé de poste synthétique, 5-8 mots max",
   "profil": [
-    "Paragraphe 1 : expertise globale et années d'expérience",
-    "Paragraphe 2 : domaines de spécialisation techniques",
-    "Paragraphe 3 : qualités humaines et méthodologiques",
-    "Paragraphe 4 : valeur ajoutée différenciante"
+    "Paragraphe 1 : identité + années d'expérience + spécialisation + secteurs clés (1 phrase dense)",
+    "Paragraphe 2 : maîtrise des outils/solutions clés, exemples entre parenthèses (1 phrase)",
+    "Paragraphe 3 : expérience opérationnelle concrète + certifications marquantes (1-2 phrases)",
+    "Paragraphe 4 (optionnel, laisser '' si non pertinent) : langues"
   ],
   "competences": [
     {"categorie": "Catégorie courte", "contenu": "outil1, outil2, outil3"},
@@ -65,7 +65,14 @@ Analyse le CV ci-dessous et retourne UNIQUEMENT un objet JSON valide (sans texte
 }
 
 Règles importantes :
-- Le profil doit contenir EXACTEMENT 4 paragraphes de 2-3 phrases, rédigés à la 3e personne en français, ton professionnel
+- Le profil doit être COURT et DENSE au global (~80-100 mots maximum pour l'ensemble), réparti sur
+  3 à 4 paragraphes COURTS (1 à 2 phrases chacun) — JAMAIS de longs paragraphes de 3+ phrases.
+  Structure attendue :
+    1. Identité + nombre d'années d'expérience + spécialisation + secteurs/contextes clés (1 phrase)
+    2. Maîtrise des outils/solutions techniques clés, exemples entre parenthèses (1 phrase)
+    3. Expérience opérationnelle concrète (niveaux, méthodologies) + certifications marquantes (1-2 phrases)
+    4. Langues, uniquement si pertinent — sinon laisser une chaîne vide "" pour ce 4e paragraphe
+  Un profil rédigé en 4 longs paragraphes détaillés est INCORRECT : viser la concision avant tout.
 - Les compétences : 7 entrées maximum, contenu séparé par des virgules (jamais de puces)
 - Les missions en ordre chronologique INVERSE (plus récente en premier)
 - Les bullets : 3-6 par mission, commençant par un verbe d'action (Conception, Déploiement, Animation, etc.)
@@ -187,3 +194,4 @@ async def generate_template(file: UploadFile = File(...)):
 _static_dir = Path(__file__).parent.parent / "frontend" / "dist"
 if _static_dir.exists():
     app.mount("/", StaticFiles(directory=str(_static_dir), html=True), name="static")
+
